@@ -1,0 +1,217 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AI Chat assistant</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 900px; margin: 20px auto; padding: 0 12px; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    select, input, button { padding: 10px; font-size: 14px; }
+    #chat { border: 1px solid #ddd; padding: 12px; height: 420px; overflow: auto; border-radius: 10px; background: #fafafa; }
+    .msg { margin: 10px 0; padding: 10px; border-radius: 10px; max-width: 85%; }
+    .user { background: #e7f0ff; margin-left: auto; }
+    .bot { background: #fff; border: 1px solid #eee; }
+    .meta { color: #666; font-size: 12px; margin-top: 6px; }
+  </style>
+</head>
+<!-- Floating Chat Button -->
+<button id="chatFab" aria-label="Open chat">💬</button>
+
+<!-- Floating Chat Panel -->
+<div id="chatWidget" class="chat closed">
+  <div class="chatHeader">
+    <div>
+      <div class="chatTitle">Sarah AI</div>
+      <div class="chatSub">AI Agent Specialist</div>
+    </div>
+    <button id="chatClose" aria-label="Close chat">✕</button>
+  </div>
+
+  <div class="chatTools">
+    <label><b>Model</b></label>
+    <select id="model">
+      <option value="mistral">mistral</option>
+      <option value="gemma3">gemma</option>
+      <option value="llama3.1:8b">llama3</option>
+    </select>
+
+    <label class="bizToggle">
+      <input type="checkbox" id="bizMode" checked />
+      <span>Business</span>
+    </label>
+
+    <button id="clear">Clear</button>
+  </div>
+
+  <div id="chat" class="chatBody"></div>
+
+  <div class="chatInputRow">
+    <input id="text" placeholder="Type your message..." />
+    <button id="send">Send</button>
+  </div>
+</div>
+
+<style>
+  /* Floating button */
+  #chatFab{
+    position: fixed; right: 18px; bottom: 18px;
+    width: 56px; height: 56px; border-radius: 50%;
+    border: 0; cursor: pointer;
+    box-shadow: 0 10px 25px rgba(0,0,0,.18);
+    font-size: 22px;
+    background: #111; color: #fff;
+    z-index: 9999;
+  }
+
+  /* Widget container */
+  .chat{
+    position: fixed; right: 18px; bottom: 86px;
+    width: 360px; max-width: calc(100vw - 36px);
+    height: 520px; max-height: calc(100vh - 120px);
+    background: #fff; border: 1px solid #e6e6e6;
+    border-radius: 16px;
+    box-shadow: 0 18px 45px rgba(0,0,0,.18);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    z-index: 9999;
+    transform-origin: bottom right;
+    transition: transform .18s ease, opacity .18s ease;
+  }
+  .chat.closed{
+    opacity: 0; pointer-events: none;
+    transform: scale(.92) translateY(8px);
+  }
+
+  .chatHeader{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 12px 12px;
+    background: #111; color:#fff;
+  }
+  .chatTitle{ font-weight:700; font-size:14px; line-height:1.1; }
+  .chatSub{ font-size:12px; opacity:.85; }
+  #chatClose{
+    border:0; background:transparent; color:#fff; cursor:pointer;
+    font-size: 16px; padding: 6px 10px; border-radius: 10px;
+  }
+  #chatClose:hover{ background: rgba(255,255,255,.12); }
+
+  .chatTools{
+    display:flex; gap:10px; flex-wrap:wrap;
+    align-items:center;
+    padding: 10px 12px;
+    border-bottom: 1px solid #eee;
+    font-size: 13px;
+  }
+  .chatTools select, .chatTools button{
+    padding: 8px 10px; font-size: 13px;
+  }
+  .bizToggle{ display:flex; gap:6px; align-items:center; }
+
+  .chatBody{
+    flex: 1;
+    padding: 12px;
+    overflow:auto;
+    background: #fafafa;
+  }
+
+  .msg{ margin: 10px 0; padding: 10px; border-radius: 12px; max-width: 85%; white-space: pre-wrap; }
+  .user{ background:#e7f0ff; margin-left:auto; }
+  .bot{ background:#fff; border: 1px solid #eee; }
+
+  .chatInputRow{
+    display:flex; gap:10px;
+    padding: 10px 12px;
+    border-top: 1px solid #eee;
+    background: #fff;
+  }
+  .chatInputRow input{
+    flex:1; padding: 10px; font-size: 14px;
+  }
+  .chatInputRow button{
+    padding: 10px 14px; font-size: 14px; cursor:pointer;
+  }
+</style>
+
+<script>
+  const chatFab = document.getElementById("chatFab");
+  const chatWidget = document.getElementById("chatWidget");
+  const chatClose = document.getElementById("chatClose");
+
+  const chatEl = document.getElementById("chat");
+  const textEl = document.getElementById("text");
+  const modelEl = document.getElementById("model");
+  const bizEl = document.getElementById("bizMode");
+
+  let messages = [];
+
+  function openChat(){ chatWidget.classList.remove("closed"); textEl.focus(); }
+  function closeChat(){ chatWidget.classList.add("closed"); }
+
+  chatFab.onclick = () => chatWidget.classList.contains("closed") ? openChat() : closeChat();
+  chatClose.onclick = closeChat;
+
+  function addMsg(role, content) {
+    const div = document.createElement("div");
+    div.className = `msg ${role === "user" ? "user" : "bot"}`;
+    div.textContent = content;
+    chatEl.appendChild(div);
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+
+  function systemPrompt() {
+    if (!bizEl.checked) return null;
+    return `You are a business website assistant.
+Reply in 3–5 short sentences.
+Only answer business-related questions.
+If the topic is unrelated, politely redirect to business services.
+If the user shows interest, ask for their name and email.
+Do not use bullet points.`;
+  }
+
+  async function send() {
+    const text = textEl.value.trim();
+    if (!text) return;
+
+    textEl.value = "";
+    addMsg("user", text);
+
+    const sys = systemPrompt();
+    const outbound = [];
+    if (sys) outbound.push({ role: "system", content: sys });
+    outbound.push(...messages);
+    outbound.push({ role: "user", content: text });
+
+    messages.push({ role: "user", content: text });
+
+    addMsg("assistant", "Thinking...");
+
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: modelEl.value, messages: outbound })
+    });
+
+    // remove "Thinking..."
+    chatEl.lastChild.remove();
+
+    const data = await res.json();
+    const reply = data.reply || "(no reply)";
+    addMsg("assistant", reply);
+
+    messages.push({ role: "assistant", content: reply });
+  }
+
+  document.getElementById("send").onclick = send;
+  textEl.addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
+
+  document.getElementById("clear").onclick = () => {
+    messages = [];
+    chatEl.innerHTML = "";
+  };
+
+  // Optional: auto-open once
+  // openChat();
+</script>
+
+</html>
